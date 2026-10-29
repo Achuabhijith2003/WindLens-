@@ -7,6 +7,7 @@ import ForecastAnalysisTab from './components/ForecastAnalysisTab';
 import ErrorAnalysisTab from './components/ErrorAnalysisTab';
 import DataQualitySection from './components/DataQualitySection';
 import IntervalTable from './components/IntervalTable';
+import MultiDayAccuracyChart from './components/MultiDayAccuracyChart';
 import { apiService } from './services/api';
 import {
   AlertTriangle,
@@ -271,9 +272,17 @@ export default function App() {
               </div>
             )}
 
-            {/* If Multi-Day Range: Show Daily Breakdown Table & Quality Diagnostics */}
+            {/* If Multi-Day Range: Show Multi-Day Accuracy Chart, Daily Breakdown Table & Quality Diagnostics */}
             {rangeMode && accuracyData && (
-              <>
+              <div className="space-y-6">
+                <MultiDayAccuracyChart
+                  dailyBreakdown={accuracyData.dailyBreakdown}
+                  fromDate={accuracyData.fromDate}
+                  toDate={accuracyData.toDate}
+                  cutoff={accuracyData.cutoff}
+                  resolution={resolution}
+                />
+
                 <DataQualitySection
                   diagnostics={activeDiagnostics}
                   metrics={activeMetrics}
@@ -341,7 +350,7 @@ export default function App() {
                     </table>
                   </div>
                 </div>
-              </>
+              </div>
             )}
           </div>
         ) : null}
