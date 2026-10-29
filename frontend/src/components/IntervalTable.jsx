@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Download, Search, Filter } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Download, Search, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatIsoDateTime, formatIsoTime, formatNumber, formatMW } from '../utils/formatters';
 import { exportIntervalsToCsv } from '../utils/exportCsv';
 
@@ -10,20 +10,70 @@ export default function IntervalTable({
 }) {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState('startTime');
+  const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
+  const [pageSize, setPageSize] = useState(24);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const filtered = intervals.filter((item) => {
-    if (statusFilter !== 'ALL' && item.status !== statusFilter) {
-      return false;
+  // Toggle sort field & direction
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
     }
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const matchTime = item.startTime?.toLowerCase().includes(q);
-      const matchSp = String(item.settlementPeriod).includes(q);
-      const matchStatus = item.status?.toLowerCase().includes(q);
-      if (!matchTime && !matchSp && !matchStatus) return false;
-    }
-    return true;
-  });
+  };
+
+  // Filter logic
+  const filtered = useMemo(() => {
+    return intervals.filter((item) => {
+      if (statusFilter !== 'ALL' && item.status !== statusFilter) {
+        return false;
+      }
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const matchTime = item.startTime?.toLowerCase().includes(q);
+        const matchSp = String(item.settlementPeriod).includes(q);
+        const matchStatus = item.status?.toLowerCase().includes(q);
+        if (!matchTime && !matchSp && !matchStatus) return false;
+      }
+      return true;
+    });
+  }, [intervals, statusFilter, searchQuery]);
+
+  // Sort logic
+  const sorted = useMemo(() => {
+    const list = [...filtered];
+    list.sort((a, b) => {
+      let valA = a[sortField];
+      let valB = b[sortField];
+
+      // Handle nulls
+      if (valA === null || valA === undefined) return 1;
+      if (valB === null || valB === undefined) return -1;
+
+      if (typeof valA === 'string') {
+        const cmp = valA.localeCompare(valB);
+        return sortDirection === 'asc' ? cmp : -cmp;
+      }
+
+      return sortDirection === 'asc' ? valA - valB : valB - valA;
+    });
+    return list;
+  }, [filtered, sortField, sortDirection]);
+
+  // Pagination logic
+  const totalItems = sorted.length;
+  const effectivePageSize = pageSize === 'ALL' ? totalItems || 1 : Number(pageSize);
+  const totalPages = Math.max(1, Math.ceil(totalItems / effectivePageSize));
+  const page = Math.min(currentPage, totalPages);
+
+  const paginatedData = useMemo(() => {
+    if (pageSize === 'ALL') return sorted;
+    const start = (page - 1) * effectivePageSize;
+    return sorted.slice(start, start + effectivePageSize);
+  }, [sorted, page, effectivePageSize, pageSize]);
 
   return (
     <div className="card bg-base-100 border border-base-300 shadow-sm p-4 lg:p-6 space-y-4">
@@ -34,7 +84,7 @@ export default function IntervalTable({
             Detailed Delivery Intervals
           </h2>
           <p className="text-xs text-base-content/60">
-            Showing {filtered.length} of {intervals.length} delivery periods ({resolution})
+            Showing {paginatedData.length} of {intervals.length} delivery periods ({resolution})
           </p>
         </div>
 
@@ -43,7 +93,10 @@ export default function IntervalTable({
           <div className="join">
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
               className="select select-xs select-bordered join-item text-xs"
             >
               <option value="ALL">All Statuses</option>
@@ -60,16 +113,50 @@ export default function IntervalTable({
               type="text"
               placeholder="Search time or SP..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
               className="input input-xs input-bordered pl-7 pr-2 font-mono text-xs w-36"
             />
             <Search className="w-3.5 h-3.5 text-base-content/40 absolute left-2 top-2" />
           </div>
 
+          {/* Page size toggle buttons */}
+          <div className="join" title="Rows per page">
+            {[12, 24, 48].map((size) => (
+              <button
+                key={size}
+                type="button"
+                onClick={() => {
+                  setPageSize(size);
+                  setCurrentPage(1);
+                }}
+                className={`btn btn-xs join-item border-base-300 ${
+                  pageSize === size ? 'btn-active bg-base-300 text-base-content font-bold' : ''
+                }`}
+              >
+                {size}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                setPageSize('ALL');
+                setCurrentPage(1);
+              }}
+              className={`btn btn-xs join-item border-base-300 ${
+                pageSize === 'ALL' ? 'btn-active bg-base-300 text-base-content font-bold' : ''
+              }`}
+            >
+              All
+            </button>
+          </div>
+
           {/* CSV Export Button */}
           <button
             type="button"
-            onClick={() => exportIntervalsToCsv(intervals, metadata)}
+            onClick={() => exportIntervalsToCsv(sorted, metadata)}
             className="btn btn-xs btn-outline border-base-300 gap-1.5"
             title="Download CSV of displayed comparison intervals"
           >
@@ -83,26 +170,66 @@ export default function IntervalTable({
       <div className="overflow-x-auto max-h-96 rounded-lg border border-base-200">
         <table className="table table-xs table-pin-rows table-zebra w-full text-xs font-mono">
           <thead>
-            <tr className="bg-base-200 text-base-content/80 uppercase text-[10px] tracking-wider font-sans">
-              <th>Delivery Start (UTC)</th>
+            <tr className="bg-base-200 text-base-content/80 uppercase text-[10px] tracking-wider font-sans select-none">
+              <th
+                onClick={() => handleSort('startTime')}
+                className="cursor-pointer hover:text-base-content"
+              >
+                <div className="flex items-center gap-1">
+                  <span>Delivery Start (UTC)</span>
+                  <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                </div>
+              </th>
               <th className="text-center">SP</th>
-              <th className="text-right">Forecast</th>
-              <th className="text-right">Actual</th>
-              <th className="text-right">Signed Error</th>
+              <th
+                onClick={() => handleSort('forecastGeneration')}
+                className="text-right cursor-pointer hover:text-base-content"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  <span>Forecast</span>
+                  <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('actualGeneration')}
+                className="text-right cursor-pointer hover:text-base-content"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  <span>Actual</span>
+                  <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('signedError')}
+                className="text-right cursor-pointer hover:text-base-content"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  <span>Signed Error</span>
+                  <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                </div>
+              </th>
               <th className="text-center">Status</th>
               <th>Forecast Published (UTC)</th>
-              <th className="text-right">Lead Time</th>
+              <th
+                onClick={() => handleSort('leadTimeHours')}
+                className="text-right cursor-pointer hover:text-base-content"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  <span>Lead Time</span>
+                  <ArrowUpDown className="w-2.5 h-2.5 opacity-60" />
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {paginatedData.length === 0 ? (
               <tr>
                 <td colSpan={8} className="text-center py-8 text-base-content/50 font-sans">
                   No delivery intervals match the selected filters.
                 </td>
               </tr>
             ) : (
-              filtered.map((item, idx) => {
+              paginatedData.map((item, idx) => {
                 const signedErr = item.signedError;
                 const errColor =
                   signedErr === null || signedErr === undefined
@@ -170,7 +297,35 @@ export default function IntervalTable({
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Bar */}
+      {pageSize !== 'ALL' && totalPages > 1 && (
+        <div className="flex items-center justify-between text-xs text-base-content/70 pt-2 border-t border-base-200">
+          <div>
+            Showing {(page - 1) * effectivePageSize + 1} to{' '}
+            {Math.min(page * effectivePageSize, totalItems)} of {totalItems} rows
+          </div>
+          <div className="join">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="btn btn-xs join-item border-base-300"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <span className="btn btn-xs join-item border-base-300 pointer-events-none font-mono">
+              Page {page} / {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="btn btn-xs join-item border-base-300"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

@@ -3,10 +3,21 @@ import Header from './components/Header';
 import FilterPanel from './components/FilterPanel';
 import KpiCards from './components/KpiCards';
 import ForecastChart from './components/ForecastChart';
+import ForecastAnalysisTab from './components/ForecastAnalysisTab';
+import ErrorAnalysisTab from './components/ErrorAnalysisTab';
 import DataQualitySection from './components/DataQualitySection';
 import IntervalTable from './components/IntervalTable';
 import { apiService } from './services/api';
-import { AlertTriangle, RefreshCw, BarChart3, Database } from 'lucide-react';
+import {
+  AlertTriangle,
+  LineChart,
+  TrendingUp,
+  Activity,
+  ShieldCheck,
+  Table,
+  Calendar,
+  Layers,
+} from 'lucide-react';
 
 export default function App() {
   const [deliveryDate, setDeliveryDate] = useState('2026-01-01');
@@ -15,6 +26,7 @@ export default function App() {
   const [rangeMode, setRangeMode] = useState(false);
   const [fromDate, setFromDate] = useState('2026-01-01');
   const [toDate, setToDate] = useState('2026-01-03');
+  const [activeTab, setActiveTab] = useState('overview');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -75,7 +87,7 @@ export default function App() {
   const activeIntervals = timeseriesData?.intervals || [];
 
   return (
-    <div className="min-h-screen bg-base-200 text-base-content flex flex-col">
+    <div className="min-h-screen bg-base-200 text-base-content flex flex-col font-sans">
       <Header isConnected={isConnected} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-6">
@@ -128,33 +140,135 @@ export default function App() {
         {/* Main Dashboard Content */}
         {(!rangeMode && overviewData && timeseriesData) || (rangeMode && accuracyData) ? (
           <div className="space-y-6 animate-fade-in">
-            {/* KPI Cards */}
+            {/* KPI Cards (Always visible across all tabs for consistent key metrics) */}
             <KpiCards metrics={activeMetrics} resolution={resolution} />
 
-            {/* If Single Day: Show Chart & Table */}
+            {/* If Single Day: Display Tab Navigation and Analytics Views */}
             {!rangeMode && (
-              <>
-                <ForecastChart
-                  intervals={activeIntervals}
-                  resolution={resolution}
-                />
+              <div className="space-y-4">
+                {/* DaisyUI Tabs Navigation */}
+                <div role="tablist" className="tabs tabs-box bg-base-100 p-1.5 rounded-xl border border-base-300 shadow-xs flex flex-wrap gap-1">
+                  <button
+                    role="tab"
+                    onClick={() => setActiveTab('overview')}
+                    className={`tab gap-2 text-xs font-semibold py-2 px-3.5 transition-all ${
+                      activeTab === 'overview'
+                        ? 'tab-active bg-primary text-primary-content shadow-xs'
+                        : 'text-base-content/75 hover:text-base-content'
+                    }`}
+                  >
+                    <LineChart className="w-3.5 h-3.5" />
+                    <span>Overview & Timeline</span>
+                  </button>
 
-                <DataQualitySection
-                  diagnostics={activeDiagnostics}
-                  metrics={activeMetrics}
-                  resolution={resolution}
-                />
+                  <button
+                    role="tab"
+                    onClick={() => setActiveTab('forecast')}
+                    className={`tab gap-2 text-xs font-semibold py-2 px-3.5 transition-all ${
+                      activeTab === 'forecast'
+                        ? 'tab-active bg-primary text-primary-content shadow-xs'
+                        : 'text-base-content/75 hover:text-base-content'
+                    }`}
+                  >
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span>Forecast Correlation</span>
+                  </button>
 
-                <IntervalTable
-                  intervals={activeIntervals}
-                  metadata={{
-                    date: deliveryDate,
-                    cutoff: cutoff,
-                    resolution: resolution,
-                  }}
-                  resolution={resolution}
-                />
-              </>
+                  <button
+                    role="tab"
+                    onClick={() => setActiveTab('error')}
+                    className={`tab gap-2 text-xs font-semibold py-2 px-3.5 transition-all ${
+                      activeTab === 'error'
+                        ? 'tab-active bg-primary text-primary-content shadow-xs'
+                        : 'text-base-content/75 hover:text-base-content'
+                    }`}
+                  >
+                    <Activity className="w-3.5 h-3.5" />
+                    <span>Error & Bias Analysis</span>
+                  </button>
+
+                  <button
+                    role="tab"
+                    onClick={() => setActiveTab('quality')}
+                    className={`tab gap-2 text-xs font-semibold py-2 px-3.5 transition-all ${
+                      activeTab === 'quality'
+                        ? 'tab-active bg-primary text-primary-content shadow-xs'
+                        : 'text-base-content/75 hover:text-base-content'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Data Quality & Integrity</span>
+                  </button>
+
+                  <button
+                    role="tab"
+                    onClick={() => setActiveTab('intervals')}
+                    className={`tab gap-2 text-xs font-semibold py-2 px-3.5 transition-all ${
+                      activeTab === 'intervals'
+                        ? 'tab-active bg-primary text-primary-content shadow-xs'
+                        : 'text-base-content/75 hover:text-base-content'
+                    }`}
+                  >
+                    <Table className="w-3.5 h-3.5" />
+                    <span>Detailed Intervals</span>
+                  </button>
+                </div>
+
+                {/* Tab 1: Overview */}
+                {activeTab === 'overview' && (
+                  <div className="space-y-4">
+                    <ForecastChart
+                      intervals={activeIntervals}
+                      resolution={resolution}
+                    />
+                    <DataQualitySection
+                      diagnostics={activeDiagnostics}
+                      metrics={activeMetrics}
+                      resolution={resolution}
+                    />
+                  </div>
+                )}
+
+                {/* Tab 2: Forecast Analysis (Scatter Correlation & Histogram) */}
+                {activeTab === 'forecast' && (
+                  <ForecastAnalysisTab
+                    intervals={activeIntervals}
+                    metrics={activeMetrics}
+                    resolution={resolution}
+                  />
+                )}
+
+                {/* Tab 3: Error Analysis (Signed Error Timeline, Diurnal Profile, Outliers) */}
+                {activeTab === 'error' && (
+                  <ErrorAnalysisTab
+                    intervals={activeIntervals}
+                    metrics={activeMetrics}
+                    resolution={resolution}
+                  />
+                )}
+
+                {/* Tab 4: Data Quality & Mechanics */}
+                {activeTab === 'quality' && (
+                  <DataQualitySection
+                    diagnostics={activeDiagnostics}
+                    metrics={activeMetrics}
+                    resolution={resolution}
+                  />
+                )}
+
+                {/* Tab 5: Detailed Intervals Table */}
+                {activeTab === 'intervals' && (
+                  <IntervalTable
+                    intervals={activeIntervals}
+                    metadata={{
+                      date: deliveryDate,
+                      cutoff: cutoff,
+                      resolution: resolution,
+                    }}
+                    resolution={resolution}
+                  />
+                )}
+              </div>
             )}
 
             {/* If Multi-Day Range: Show Daily Breakdown Table & Quality Diagnostics */}
@@ -173,7 +287,7 @@ export default function App() {
                         Daily Accuracy Breakdown ({accuracyData.fromDate} to {accuracyData.toDate})
                       </h2>
                       <p className="text-xs text-base-content/60">
-                        Evaluated under decision cutoff: <strong className="font-mono">{accuracyData.cutoff}</strong> ({resolution})
+                        Evaluated under decision cutoff: <strong className="font-mono text-primary">{accuracyData.cutoff}</strong> ({resolution})
                       </p>
                     </div>
                   </div>
@@ -235,10 +349,9 @@ export default function App() {
 
       <footer className="footer footer-center p-4 bg-base-100 text-base-content/60 text-xs border-t border-base-300">
         <div>
-          <p>WindLens UK Energy Analytics &copy; 2026. Data sourced from Elexon BMRS Insights API (FUELHH & WINDFOR streams).</p>
+          <p>WindLens GB Wind Forecast Analytics Platform &copy; 2026. Sourced from Elexon BMRS Insights API.</p>
         </div>
       </footer>
     </div>
   );
 }
-
