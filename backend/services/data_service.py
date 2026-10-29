@@ -18,8 +18,13 @@ from backend.engine.metrics import AccuracyMetrics, calculate_accuracy_metrics
 
 logger = logging.getLogger(__name__)
 
+_SERVICE_CACHE = Path(__file__).resolve().parent.parent / "data" / "cache"
 _ROOT_CACHE = Path(__file__).resolve().parent.parent.parent / "data" / "cache"
-CACHE_DIR = _ROOT_CACHE if _ROOT_CACHE.exists() else Path("data/cache")
+CACHE_DIR = (
+    _SERVICE_CACHE if _SERVICE_CACHE.exists()
+    else _ROOT_CACHE if _ROOT_CACHE.exists()
+    else Path("data/cache")
+)
 
 
 class DataService:
