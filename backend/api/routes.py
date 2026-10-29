@@ -58,6 +58,17 @@ def validate_cutoff(cutoff_str: Optional[str]) -> str:
         raise HTTPException(status_code=400, detail=str(err))
 
 
+def validate_resolution(res_str: Optional[str]) -> str:
+    """Validate alignment resolution parameter."""
+    res = (res_str or "hourly").strip().lower()
+    if res not in ("hourly", "half_hourly"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported resolution: '{res_str}'. Must be 'hourly' or 'half_hourly'.",
+        )
+    return res
+
+
 @router.get("/health", response_model=HealthResponse)
 def health_check() -> HealthResponse:
     """Health check endpoint confirming service status and version."""
@@ -73,15 +84,19 @@ def health_check() -> HealthResponse:
 def get_daily_overview(
     date: str = Query("2026-01-01", description="Target delivery date (YYYY-MM-DD)"),
     cutoff: Optional[str] = Query(DEFAULT_CUTOFF, description="Decision cutoff configuration"),
+    resolution: str = Query("hourly", description="Alignment resolution: 'hourly' (24/day) or 'half_hourly' (48/day)"),
     service: DataService = Depends(get_data_service),
 ) -> OverviewResponse:
     """Retrieve daily summary, generation distribution, and high-level accuracy metrics."""
     target_date = parse_date(date, "date")
     valid_cutoff = validate_cutoff(cutoff)
+    valid_res = validate_resolution(resolution)
 
     try:
-        overview_dict = service.get_overview(target_date, cutoff_param=valid_cutoff)
+        overview_dict = service.get_overview(target_date, cutoff_param=valid_cutoff, resolution=valid_res)
         return OverviewResponse(**overview_dict)
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("Error in GET /api/overview: %s", exc)
         raise HTTPException(status_code=500, detail=f"Failed to generate overview: {exc}")
@@ -91,15 +106,19 @@ def get_daily_overview(
 def get_daily_timeseries(
     date: str = Query("2026-01-01", description="Target delivery date (YYYY-MM-DD)"),
     cutoff: Optional[str] = Query(DEFAULT_CUTOFF, description="Decision cutoff configuration"),
+    resolution: str = Query("hourly", description="Alignment resolution: 'hourly' (24/day) or 'half_hourly' (48/day)"),
     service: DataService = Depends(get_data_service),
 ) -> TimeseriesResponse:
-    """Retrieve half-hourly timeseries of actuals, selected forecasts, errors, and lead times."""
+    """Retrieve timeseries of actuals, selected forecasts, errors, and lead times."""
     target_date = parse_date(date, "date")
     valid_cutoff = validate_cutoff(cutoff)
+    valid_res = validate_resolution(resolution)
 
     try:
-        ts_dict = service.get_timeseries(target_date, cutoff_param=valid_cutoff)
+        ts_dict = service.get_timeseries(target_date, cutoff_param=valid_cutoff, resolution=valid_res)
         return TimeseriesResponse(**ts_dict)
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("Error in GET /api/timeseries: %s", exc)
         raise HTTPException(status_code=500, detail=f"Failed to generate timeseries: {exc}")
@@ -110,6 +129,7 @@ def get_accuracy_range(
     from_date: str = Query("2026-01-01", alias="from", description="Delivery start date (YYYY-MM-DD)"),
     to_date: str = Query("2026-01-31", alias="to", description="Delivery end date (YYYY-MM-DD)"),
     cutoff: Optional[str] = Query(DEFAULT_CUTOFF, description="Decision cutoff configuration"),
+    resolution: str = Query("hourly", description="Alignment resolution: 'hourly' (24/day) or 'half_hourly' (48/day)"),
     service: DataService = Depends(get_data_service),
 ) -> AccuracyResponse:
     """Evaluate aggregate and daily accuracy metrics across a multi-day delivery range."""
@@ -123,11 +143,13 @@ def get_accuracy_range(
         )
 
     valid_cutoff = validate_cutoff(cutoff)
+    valid_res = validate_resolution(resolution)
 
     try:
-        acc_dict = service.get_accuracy_range(start_dt, end_dt, cutoff_param=valid_cutoff)
+        acc_dict = service.get_accuracy_range(start_dt, end_dt, cutoff_param=valid_cutoff, resolution=valid_res)
         return AccuracyResponse(**acc_dict)
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("Error in GET /api/accuracy: %s", exc)
         raise HTTPException(status_code=500, detail=f"Failed to calculate accuracy: {exc}")
-

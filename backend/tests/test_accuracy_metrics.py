@@ -7,7 +7,8 @@ Verifies:
 4. Mean Absolute Percentage Error (MAPE) with nonzero actual filtering.
 5. Excluded zero actual count tracking.
 6. Empty datasets handling (zero division protection).
-7. Data completeness percentage.
+7. Data completeness percentage and resolution-specific metrics.
+8. Separation of resolution mismatch from missing forecast failures.
 """
 
 import math
@@ -91,6 +92,7 @@ class TestAccuracyMetrics(unittest.TestCase):
             cutoff_description="Day-Ahead 17:00 UTC",
             intervals=intervals,
             diagnostics=MatchingDiagnostics(total_expected_intervals=8, matched_intervals_count=4),
+            resolution="hourly",
         )
 
         metrics = calculate_accuracy_metrics(dataset)
@@ -103,6 +105,7 @@ class TestAccuracyMetrics(unittest.TestCase):
         self.assertEqual(metrics.matched_intervals_count, 4)
         self.assertEqual(metrics.expected_interval_count, 8)
         self.assertEqual(metrics.data_completeness_pct, 50.0)
+        self.assertEqual(metrics.resolution, "hourly")
 
     def test_mape_excludes_zero_actual_generation(self):
         """Verify intervals with actual=0 are excluded from MAPE and counted."""
@@ -141,6 +144,7 @@ class TestAccuracyMetrics(unittest.TestCase):
             cutoff_description="Day-Ahead 17:00 UTC",
             intervals=intervals,
             diagnostics=MatchingDiagnostics(total_expected_intervals=2, matched_intervals_count=2),
+            resolution="hourly",
         )
 
         metrics = calculate_accuracy_metrics(dataset)
@@ -175,6 +179,7 @@ class TestAccuracyMetrics(unittest.TestCase):
             cutoff_description="Day-Ahead 17:00 UTC",
             intervals=intervals,
             diagnostics=MatchingDiagnostics(total_expected_intervals=1, matched_intervals_count=1),
+            resolution="hourly",
         )
 
         metrics = calculate_accuracy_metrics(dataset)
@@ -191,6 +196,7 @@ class TestAccuracyMetrics(unittest.TestCase):
             cutoff_description="Day-Ahead 17:00 UTC",
             intervals=[],
             diagnostics=MatchingDiagnostics(total_expected_intervals=48, matched_intervals_count=0),
+            resolution="half_hourly",
         )
 
         metrics = calculate_accuracy_metrics(dataset)
@@ -200,8 +206,29 @@ class TestAccuracyMetrics(unittest.TestCase):
         self.assertIsNone(metrics.mape_pct)
         self.assertEqual(metrics.matched_intervals_count, 0)
         self.assertEqual(metrics.data_completeness_pct, 0.0)
+        self.assertEqual(metrics.resolution, "half_hourly")
+
+    def test_resolution_mismatch_counted_separately_from_missing_forecast(self):
+        """Verify resolution mismatch is tracked in metrics separately from pipeline failures."""
+        dataset = MatchedDataset(
+            start_date="2026-01-01",
+            end_date="2026-01-01",
+            cutoff_canonical="day_ahead_1700",
+            cutoff_description="Day-Ahead 17:00 UTC",
+            intervals=[],
+            diagnostics=MatchingDiagnostics(
+                total_expected_intervals=48,
+                matched_intervals_count=20,
+                missing_forecast_count=4,
+                resolution_mismatch_count=24,
+            ),
+            resolution="half_hourly",
+        )
+
+        metrics = calculate_accuracy_metrics(dataset)
+        self.assertEqual(metrics.resolution_mismatch_count, 24)
+        self.assertEqual(metrics.missing_forecast_count, 4)
 
 
 if __name__ == "__main__":
     unittest.main()
-

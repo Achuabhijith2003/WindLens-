@@ -6,6 +6,7 @@ Calculates standard forecast evaluation metrics:
 - Signed Bias in MW (forecast - actual)
 - Mean Absolute Percentage Error (MAPE) with explicit zero-actual handling
 - Completeness percentage and coverage counts
+- Explicit labeling of resolution mismatches vs genuine data pipeline failures
 """
 
 from __future__ import annotations
@@ -30,8 +31,10 @@ class AccuracyMetrics:
     matched_intervals_count: int
     expected_interval_count: int
     missing_forecast_count: int
+    resolution_mismatch_count: int
     missing_actual_count: int
     data_completeness_pct: float
+    resolution: str
     selected_cutoff: str
     methodology: str
 
@@ -46,8 +49,10 @@ class AccuracyMetrics:
             "matched_intervals_count": self.matched_intervals_count,
             "expected_interval_count": self.expected_interval_count,
             "missing_forecast_count": self.missing_forecast_count,
+            "resolution_mismatch_count": self.resolution_mismatch_count,
             "missing_actual_count": self.missing_actual_count,
             "data_completeness_pct": round(self.data_completeness_pct, 2),
+            "resolution": self.resolution,
             "selected_cutoff": self.selected_cutoff,
             "methodology": self.methodology,
         }
@@ -61,6 +66,18 @@ def calculate_accuracy_metrics(dataset: MatchedDataset) -> AccuracyMetrics:
 
     completeness_pct = (n / expected_count * 100.0) if expected_count > 0 else 0.0
 
+    resolution_note = (
+        f"Alignment Resolution: '{dataset.resolution}'. "
+        + (
+            "Aggregates two 30-minute FUELHH outturn records (H:00 and H:30) via arithmetic mean into 1-hour average MW. "
+            "Evaluates 24 hourly delivery slots per day."
+            if dataset.resolution == "hourly"
+            else "Preserves raw 30-minute settlement slots (48 per day). Note: WINDFOR publishes hourly forecasts; "
+            ":30 slots have status 'resolution_mismatch' and are separated from pipeline failures."
+        )
+    )
+    full_methodology = f"{dataset.cutoff_description} {CUTOFF_METHODOLOGY_NOTES} {resolution_note}"
+
     if n == 0:
         return AccuracyMetrics(
             mae_mw=None,
@@ -71,10 +88,12 @@ def calculate_accuracy_metrics(dataset: MatchedDataset) -> AccuracyMetrics:
             matched_intervals_count=0,
             expected_interval_count=expected_count,
             missing_forecast_count=dataset.diagnostics.missing_forecast_count,
+            resolution_mismatch_count=dataset.diagnostics.resolution_mismatch_count,
             missing_actual_count=dataset.diagnostics.missing_actual_count,
             data_completeness_pct=completeness_pct,
+            resolution=dataset.resolution,
             selected_cutoff=dataset.cutoff_canonical,
-            methodology=f"{dataset.cutoff_description} {CUTOFF_METHODOLOGY_NOTES}",
+            methodology=full_methodology,
         )
 
     signed_errors: List[float] = []
@@ -117,9 +136,10 @@ def calculate_accuracy_metrics(dataset: MatchedDataset) -> AccuracyMetrics:
         matched_intervals_count=n,
         expected_interval_count=expected_count,
         missing_forecast_count=dataset.diagnostics.missing_forecast_count,
+        resolution_mismatch_count=dataset.diagnostics.resolution_mismatch_count,
         missing_actual_count=dataset.diagnostics.missing_actual_count,
         data_completeness_pct=completeness_pct,
+        resolution=dataset.resolution,
         selected_cutoff=dataset.cutoff_canonical,
-        methodology=f"{dataset.cutoff_description} {CUTOFF_METHODOLOGY_NOTES}",
+        methodology=full_methodology,
     )
-

@@ -1,11 +1,16 @@
 """Decision cutoff resolution for wind generation forecast selection.
 
 Supports:
-1. Day-Ahead reference cutoffs (e.g. 'day_ahead_1700', 'day_ahead_1200').
-   Assumption: For delivery on date D, cutoff is D-1 at the specified UTC time.
+1. Day-Ahead reference cutoffs (e.g. 'day_ahead_1700', 'day_ahead_1200'):
+   Calculated independently for each delivery date D as (D - 1) at the specified UTC time.
+   For multi-day delivery periods (e.g. all of January 2026), every delivery date receives
+   its own separate cutoff (e.g. Jan 1 delivery cutoff is Dec 31 17:00 UTC; Jan 2 delivery
+   cutoff is Jan 1 17:00 UTC). A single fixed cutoff is never used across the month.
    Explicit notice: This is an assumed analytical benchmark, not an official Elexon statutory deadline.
-2. Lead-time / Gate closure cutoffs (e.g. 'gate_closure_1h', 'lead_4h').
-3. Absolute ISO 8601 timestamps (e.g. '2025-12-31T17:00:00Z').
+2. Lead-time / Gate closure cutoffs (e.g. 'gate_closure_1h', 'lead_4h'):
+   Calculated per delivery slot as startTime - lead_time.
+3. Absolute ISO 8601 timestamps (e.g. '2025-12-31T17:00:00Z'):
+   Fixed cutoff applied uniformly across all intervals only when explicitly requested.
 """
 
 from __future__ import annotations
@@ -20,11 +25,11 @@ DEFAULT_CUTOFF = "day_ahead_1700"
 CUTOFF_METHODOLOGY_NOTES = (
     "Forecast Selection Methodology: "
     "For each delivery interval (startTime), forecasts published strictly at or before "
-    "the decision cutoff are evaluated. If multiple revisions exist, the latest publication "
-    "(maximum publishTime) is chosen, ensuring zero lookahead bias. "
-    "Default cutoff 'day_ahead_1700' assumes a reference benchmark of 17:00 UTC on the day "
-    "prior to delivery (D-1 17:00 UTC). Note: This is an assumed analytical benchmark and not "
-    "an official Elexon statutory deadline."
+    "the applicable decision cutoff are evaluated. If multiple revisions exist, the latest publication "
+    "(maximum publishTime <= cutoff) is chosen, ensuring zero lookahead bias. "
+    "Under the default 'day_ahead_1700' rule, the cutoff is computed independently for each delivery date D "
+    "as D-1 17:00:00 UTC (e.g. Jan 1 cutoff is Dec 31 17:00 UTC; Jan 2 cutoff is Jan 1 17:00 UTC). "
+    "Note: This is an assumed analytical benchmark and not an official Elexon statutory deadline."
 )
 
 
@@ -55,14 +60,14 @@ def get_cutoff_resolver(cutoff_param: Optional[str] = None) -> Tuple[Callable[[d
         def da_resolver(delivery_start: datetime) -> datetime:
             # Normalize to UTC
             utc_start = delivery_start.astimezone(timezone.utc) if delivery_start.tzinfo else delivery_start.replace(tzinfo=timezone.utc)
-            # D-1 date
+            # D-1 date: calculated independently for each delivery date D
             d_minus_1 = utc_start.date() - timedelta(days=1)
             return datetime.combine(d_minus_1, time(hour, minute), tzinfo=timezone.utc)
 
         canonical = f"day_ahead_{hour:02d}{minute:02d}"
         desc = (
             f"Day-Ahead {hour:02d}:{minute:02d} UTC (D-1). "
-            f"Evaluates forecasts published on or before {hour:02d}:{minute:02d} UTC the day prior to delivery."
+            f"Calculated independently per delivery date D: evaluates forecasts published on or before {hour:02d}:{minute:02d} UTC on D-1."
         )
         return da_resolver, canonical, desc
 
@@ -102,4 +107,3 @@ def get_cutoff_resolver(cutoff_param: Optional[str] = None) -> Tuple[Callable[[d
         f"'day_ahead_1700' (default D-1 17:00 UTC), 'day_ahead_1200' (D-1 12:00 UTC), "
         f"'gate_closure_1h' (1 hour before delivery), 'lead_4h', or an explicit ISO 8601 timestamp (e.g. '2025-12-31T17:00:00Z')."
     )
-

@@ -26,8 +26,10 @@ class AccuracyMetricsModel(BaseModel):
     matched_intervals_count: int = Field(..., description="Number of valid matched delivery intervals")
     expected_interval_count: int = Field(..., description="Expected intervals in the requested delivery range")
     missing_forecast_count: int = Field(0, description="Intervals with missing or post-cutoff forecast")
+    resolution_mismatch_count: int = Field(0, description="Intervals where forecast is unprovided due to resolution mismatch (e.g. :30)")
     missing_actual_count: int = Field(0, description="Intervals with missing actual generation outturn")
     data_completeness_pct: float = Field(..., description="Percentage of expected intervals matched")
+    resolution: str = Field("hourly", description="Alignment resolution applied ('hourly' or 'half_hourly')")
     selected_cutoff: str = Field(..., description="Decision cutoff configuration applied")
     methodology: str = Field(..., description="Explicit documentation of methodology & cutoff assumptions")
 
@@ -39,6 +41,7 @@ class DiagnosticsModel(BaseModel):
     matched_intervals_count: int
     missing_actual_count: int
     missing_forecast_count: int
+    resolution_mismatch_count: int = 0
     missing_both_count: int
     duplicate_actual_records: int
     conflicting_actual_records: int
@@ -62,6 +65,7 @@ class OverviewResponse(BaseModel):
     """Response schema for GET /api/overview."""
 
     date: str
+    resolution: str = "hourly"
     cutoff: str
     cutoffDescription: str
     metrics: AccuracyMetricsModel
@@ -93,6 +97,7 @@ class TimeseriesResponse(BaseModel):
     """Response schema for GET /api/timeseries."""
 
     date: str
+    resolution: str = "hourly"
     cutoff: str
     cutoffDescription: str
     metrics: AccuracyMetricsModel
@@ -114,9 +119,9 @@ class AccuracyResponse(BaseModel):
 
     fromDate: str
     toDate: str
+    resolution: str = "hourly"
     cutoff: str
     cutoffDescription: str
     metrics: AccuracyMetricsModel
     diagnostics: DiagnosticsModel
     dailyBreakdown: List[DailyAccuracyModel]
-
