@@ -1,5 +1,24 @@
 """FastAPI entry point for WindLens Backend."""
 
+import sys
+import types
+from pathlib import Path
+
+# Ensure 'backend' package resolves cleanly whether run from repository root or inside backend/
+_HERE = Path(__file__).resolve().parent
+_PARENT = _HERE.parent
+
+if str(_PARENT) not in sys.path:
+    sys.path.insert(0, str(_PARENT))
+
+if "backend" not in sys.modules:
+    try:
+        import backend  # noqa: F401
+    except ModuleNotFoundError:
+        backend_pkg = types.ModuleType("backend")
+        backend_pkg.__path__ = [str(_HERE)]
+        sys.modules["backend"] = backend_pkg
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
