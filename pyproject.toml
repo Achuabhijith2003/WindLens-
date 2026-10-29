@@ -1,0 +1,16 @@
+[project]
+name = "windlens"
+version = "0.2.0"
+description = "UK Wind Generation Forecast Selection and Accuracy Engine"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.24.0",
+]
+
+[tool.vercel]
+entrypoint = "backend.main:app"
+

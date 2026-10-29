@@ -18,7 +18,8 @@ from backend.engine.metrics import AccuracyMetrics, calculate_accuracy_metrics
 
 logger = logging.getLogger(__name__)
 
-CACHE_DIR = Path("data/cache")
+_ROOT_CACHE = Path(__file__).resolve().parent.parent.parent / "data" / "cache"
+CACHE_DIR = _ROOT_CACHE if _ROOT_CACHE.exists() else Path("data/cache")
 
 
 class DataService:
@@ -34,7 +35,10 @@ class DataService:
         self.cache_dir = cache_dir or CACHE_DIR
         self.enable_disk_cache = enable_disk_cache
         if self.enable_disk_cache:
-            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                self.cache_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                logger.warning("Could not create cache directory (read-only filesystem): %s", exc)
 
         # In-memory storage for cached records
         self._actuals_cache: Dict[str, FuelHHRecord] = {}     # keyed by startTime ISO
